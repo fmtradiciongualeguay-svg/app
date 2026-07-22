@@ -1,0 +1,320 @@
+:root {
+  --color-primary:   #8B0000;
+  --color-secondary: #F4E8D0;
+  --color-accent:    #C9A227;
+  --color-text:      #2B2B2B;
+  --color-white:     #FFFFFF;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: var(--color-secondary);
+  color: var(--color-text);
+  padding-bottom: 80px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+.app-header {
+  background: var(--color-primary);
+  color: var(--color-white);
+  padding: 1rem;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.app-header .logo {
+  height: 50px;
+  vertical-align: middle;
+  margin-right: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent);
+}
+.app-header h1 {
+  display: inline;
+  font-size: 1.2rem;
+  vertical-align: middle;
+}
+
+/* ─── Reproductor Sticky ─────────────────────────────────── */
+.radio-sticky {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-text);
+  color: var(--color-white);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 200;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+}
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.player-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--color-accent);
+  flex-shrink: 0;
+}
+.player-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-badge.live {
+  color: #ff3b30;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+#player-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn-play {
+  background: var(--color-accent);
+  color: var(--color-primary);
+  border: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+}
+.btn-play:active { transform: scale(0.92); }
+
+/* ─── Navegación ─────────────────────────────────────────── */
+.main-nav {
+  display: flex;
+  overflow-x: auto;
+  background: var(--color-white);
+  border-bottom: 2px solid var(--color-accent);
+  position: sticky;
+  top: 82px;
+  z-index: 90;
+  scrollbar-width: none;
+}
+.main-nav::-webkit-scrollbar { display: none; }
+.nav-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px 8px;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  transition: color 0.2s, border-color 0.2s;
+}
+.nav-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ─── Vistas ─────────────────────────────────────────────── */
+.view { display: none; padding: 16px; animation: fadeIn 0.3s ease; }
+.view.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ─── Hero ───────────────────────────────────────────────── */
+.hero {
+  background-size: cover;
+  background-position: center;
+  color: white;
+  padding: 40px 20px;
+  border-radius: 12px;
+  text-align: center;
+  margin-bottom: 20px;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero h2 {
+  font-size: 1.5rem;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+  line-height: 1.4;
+}
+
+/* ─── Títulos de sección ─────────────────────────────────── */
+#programacion h2,
+#audioteca h2,
+#galeria h2,
+#youtube h2 {
+  font-size: 1.3rem;
+  color: var(--color-primary);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--color-accent);
+}
+
+/* ─── Listas ─────────────────────────────────────────────── */
+.list-item {
+  background: var(--color-white);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border-left: 4px solid var(--color-accent);
+}
+.list-item h3 {
+  color: var(--color-primary);
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+.list-item p {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 4px;
+}
+.list-item .meta {
+  font-size: 0.8rem;
+  color: #888;
+  font-weight: bold;
+}
+
+/* FIX: clase live-badge que app.js genera dinámicamente */
+.live-badge {
+  color: #ff3b30;
+  font-size: 0.8em;
+  animation: pulse 1.5s infinite;
+}
+
+.empty-msg {
+  color: #888;
+  text-align: center;
+  padding: 24px 0;
+  font-style: italic;
+}
+
+/* ─── Sliders (Galería) ──────────────────────────────────── */
+.slider-wrapper {
+  position: relative;
+  background: var(--color-white);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.slider-track {
+  display: flex;
+  transition: transform 0.3s ease;
+  will-change: transform;
+}
+.slider-slide { min-width: 100%; }
+.slider-slide img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  display: block;
+}
+.slider-caption {
+  padding: 12px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  background: var(--color-white);
+}
+.slider-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(139,0,0,0.75);
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  z-index: 10;
+  border-radius: 4px;
+  line-height: 1;
+  /* Mover los botones un poco más arriba para no quedar sobre el caption */
+  margin-top: -20px;
+}
+.slider-btn.prev { left: 8px; }
+.slider-btn.next { right: 8px; }
+
+/* ─── YouTube ────────────────────────────────────────────── */
+.yt-wrapper {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+}
+.yt-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.placeholder-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #aaa;
+  font-style: italic;
+}
+
+/* ─── WhatsApp Float ─────────────────────────────────────── */
+.wa-float {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  background: #25D366;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 150;
+  transition: transform 0.2s;
+  text-decoration: none;
+}
+.wa-float:active { transform: scale(0.9); }

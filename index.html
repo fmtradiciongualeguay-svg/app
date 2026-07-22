@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FM Tradición 97.1</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/jpeg" href="https://raw.githubusercontent.com/fmtradiciongualeguay-svg/recursosFmtradicion/main/imagenes/logo-fm-tradicion.jpg">
+  <!-- Apple PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FM Tradición">
+  <meta name="theme-color" content="#8B0000">
+</head>
+<body>
+
+  <!-- Header Persistente -->
+  <header class="app-header">
+    <img src="" alt="Logo FM Tradición" id="header-logo" class="logo">
+    <h1>FM Tradición 97.1</h1>
+  </header>
+
+  <!-- Reproductor Global Sticky -->
+  <section id="radio-player" class="radio-sticky">
+    <div class="player-info">
+      <img src="" alt="Cover" id="player-cover" class="player-cover">
+      <div class="player-text">
+        <span id="player-status" class="status-badge">Tocá ▶ para escuchar</span>
+        <span id="player-title">FM Tradición 97.1</span>
+      </div>
+    </div>
+    <div class="player-controls">
+      <button id="btn-play" class="btn-play" aria-label="Reproducir">▶</button>
+    </div>
+    <!-- FIX: <audio> sin <source> vacío; el src se asigna desde app.js + audio.load() -->
+    <audio id="audio-stream" preload="none"></audio>
+  </section>
+
+  <!-- Navegación -->
+  <nav class="main-nav">
+    <button class="nav-btn active" data-target="inicio">Inicio</button>
+    <button class="nav-btn" data-target="programacion">Programación</button>
+    <button class="nav-btn" data-target="audioteca">Audioteca</button>
+    <button class="nav-btn" data-target="galeria">Galería</button>
+    <button class="nav-btn" data-target="youtube">YouTube</button>
+  </nav>
+
+  <!-- Contenido Dinámico -->
+  <main id="app-content">
+
+    <section id="inicio" class="view active">
+      <div class="hero" id="hero-bg">
+        <h2>Tu radio amiga, la que conecta con nuestra esencia</h2>
+      </div>
+    </section>
+
+    <section id="programacion" class="view">
+      <h2>Programación</h2>
+      <div id="prog-list" class="list-container"></div>
+    </section>
+
+    <section id="audioteca" class="view">
+      <h2>Audioteca</h2>
+      <div id="audio-list" class="list-container"></div>
+    </section>
+
+    <section id="galeria" class="view">
+      <h2>Galería</h2>
+      <div id="gallery-container" class="slider-container"></div>
+    </section>
+
+    <section id="youtube" class="view">
+      <h2>YouTube en Vivo</h2>
+      <div class="yt-wrapper" id="yt-container">
+        <p class="placeholder-text">Cargando transmisión...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Botón Flotante WhatsApp -->
+  <a id="wa-btn" href="#" target="_blank" rel="noopener" class="wa-float" aria-label="Contactar por WhatsApp">
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="#ffffff">
+      <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/>
+    </svg>
+  </a>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // FIX: ruta relativa './sw.js' en lugar de '/sw.js'
+    // Esto funciona tanto en raíz de dominio como en subdirectorios (Vercel, GitHub Pages, etc.)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[SW] Registrado:', reg.scope))
+          .catch(err => console.error('[SW] Error al registrar:', err));
+      });
+    }
+  </script>
+</body>
+</html>
