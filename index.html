@@ -69,7 +69,7 @@
     
   </aside>
 
-  <!-- BANNER LIVE YOUTUBE -->
+  <!-- BANNER LIVE MULTIPLATFORMA -->
   <div id="live-banner" class="live-banner" style="display:none">
     <div class="live-inner">
       <div class="live-dot"></div>
@@ -104,6 +104,7 @@
     <button class="nav-btn" data-target="audioteca">Audioteca</button>
     <button class="nav-btn" data-target="galeria">Galería</button>
     <button class="nav-btn" data-target="youtube">YouTube</button>
+    <button class="nav-btn" data-target="contactos">Contactos</button>
   </nav>
 
   <!-- Contenido -->
@@ -128,15 +129,41 @@
     <!-- INFO LOCAL -->
     <section id="info-local" class="view">
       <h2>Info Local</h2>
+
+      <!-- CLIMA -->
       <div class="info-block">
         <h3 class="info-block-title">🌤️ Clima en Gualeguay</h3>
         <div id="clima-ext-content"><div class="widget-loading">Cargando...</div></div>
       </div>
+
+      <!-- RÍOS PREFECTURA NAVAL con flechas de tendencia -->
       <div class="info-block">
-        <h3 class="info-block-title">🌊 Altura de los Ríos</h3>
-        <p class="info-source">Registros manuales · Bomberos / Defensa Civil</p>
-        <div id="rios-manual-content"><div class="widget-loading">Cargando...</div></div>
+        <h3 class="info-block-title">🌊 Estado de los Ríos</h3>
+        <p class="info-source">
+          Fuente: <strong>Prefectura Naval Argentina</strong> · Valores en metros (m)
+          · <a id="link-pdf-rios" href="#" class="info-source-link" target="_blank" rel="noopener">📄 Ver PDF oficial</a>
+          · <a href="https://contenidosweb.prefecturanaval.gob.ar/alturas/mapa.php" target="_blank" rel="noopener" class="info-source-link">🗺️ Ver mapa</a>
+        </p>
+        <div id="rios-prefectura-content"><div class="widget-loading">Cargando...</div></div>
+
+        <!-- Visor PDF Prefectura -->
+        <div id="pdf-viewer-wrap" class="pdf-viewer-wrap" style="display:none">
+          <div class="pdf-viewer-header">
+            <span>📄 Registro diario — Prefectura Naval Argentina</span>
+            <button id="pdf-close-btn" class="pdf-close-btn">✕</button>
+          </div>
+          <iframe id="pdf-iframe" class="pdf-iframe" src="" title="PDF Ríos Prefectura Naval"></iframe>
+        </div>
+
+        <!-- Registros manuales Bomberos -->
+        <div class="manual-block">
+          <h4>📋 Registros Bomberos / Defensa Civil</h4>
+          <p class="info-source">Datos cargados manualmente por FM Tradición</p>
+          <div id="rios-manual-content"><div class="widget-loading">Cargando...</div></div>
+        </div>
       </div>
+
+      <!-- FARMACIA -->
       <div class="info-block">
         <h3 class="info-block-title">💊 Farmacia de Turno</h3>
         <p class="info-source">Actualizado por FM Tradición · Confirmar llamando antes de ir</p>
@@ -165,21 +192,39 @@
     <!-- YOUTUBE -->
     <section id="youtube" class="view">
       <h2>YouTube</h2>
+
+      <!-- Reproductor embebido -->
       <div id="yt-player-wrapper" class="yt-player-wrapper" style="display:none">
         <div class="yt-wrapper" id="yt-container"></div>
         <div id="yt-playing-label" class="yt-playing-label"></div>
         <button id="yt-close-btn" class="yt-close-btn">✕ Cerrar reproductor</button>
       </div>
+
+      <!-- Tabs -->
       <div class="yt-tabs">
         <button class="yt-tab active" data-ytab="en-vivo">🔴 En Vivo</button>
-        <button class="yt-tab" data-ytab="grabados">📹 Grabados</button>
+        <button class="yt-tab" data-ytab="grabados">📹 Programas</button>
       </div>
+
+      <!-- EN VIVO (YouTube + Facebook + Instagram) -->
       <div id="ytab-en-vivo" class="ytab active">
-        <div id="yt-live-list" class="list-container"></div>
+        <div id="yt-live-list"></div>
       </div>
+
+      <!-- GRABADOS agrupados por programa -->
       <div id="ytab-grabados" class="ytab">
+        <!-- Selector de programa -->
+        <div id="yt-programa-selector" class="programa-selector"></div>
+        <!-- Videos del programa seleccionado -->
         <div id="yt-recorded-list" class="yt-grid"></div>
       </div>
+    </section>
+
+    <!-- CONTACTOS ÚTILES -->
+    <section id="contactos" class="view">
+      <h2>Contactos Útiles</h2>
+      <p class="info-source" style="margin-bottom:12px">Gualeguay, Entre Ríos · Información de referencia</p>
+      <div id="contactos-list"></div>
     </section>
 
   </main>

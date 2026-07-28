@@ -194,6 +194,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderWidgetRios(rioManual);
     renderRiosManual(rioManual);
 
+    // Ríos Prefectura Naval con flechas
+    const riosPref = await fetchData('rios_prefectura');
+    renderRiosPrefectura(riosPref);
+
     // Farmacia
     const farmData = await fetchData('farmacia_turno');
     renderWidgetFarmacia(farmData);
@@ -270,7 +274,97 @@ document.addEventListener('DOMContentLoaded', () => {
       <p class="info-source" style="margin-top:8px">Fuente: Open-Meteo · Gratis · Sin registro</p>`;
   }
 
-  function renderRiosManual(data) {
+  // ─── RÍOS PREFECTURA NAVAL con flechas de tendencia ─────────────────────
+  function renderRiosPrefectura(data) {
+    const el = document.getElementById('rios-prefectura-content');
+    if (!data || !data.length) {
+      el.innerHTML = '<p class="empty-msg">Sin datos de Prefectura.<br>Cargalos en la hoja <strong>rios_prefectura</strong> del Sheets.</p>';
+      return;
+    }
+
+    // Agrupar por río
+    const grupos = {};
+    data.forEach(r => {
+      const rio = r.rio || 'Otros';
+      if (!grupos[rio]) grupos[rio] = [];
+      grupos[rio].push(r);
+    });
+
+    let html = '';
+    Object.entries(grupos).forEach(([rio, estaciones]) => {
+      html += `<div class="rio-grupo-titulo">${escHtml(rio)}</div>`;
+      estaciones.forEach(r => {
+        const altura    = parseFloat(r.altura_m) || 0;
+        const variacion = parseFloat(r.variacion_m) || 0;
+        const alerta    = parseFloat(r.alerta_m) || 999;
+        const evacua    = parseFloat(r.evacuacion_m) || 999;
+        const estado    = (r.estado || '').trim().toUpperCase();
+
+        // Flecha y color de tendencia
+        let flecha = '➡️', flechaClass = 'estac';
+        if (estado === 'CRECE')        { flecha = '↑'; flechaClass = 'crece'; }
+        else if (estado === 'BAJA')    { flecha = '↓'; flechaClass = 'baja';  }
+        else if (estado === 'ALERTA')  { flecha = '⚠️'; flechaClass = 'alerta'; }
+        else if (estado.includes('EVACUA')) { flecha = '🚨'; flechaClass = 'evacuacion'; }
+
+        // Semáforo de nivel
+        let nivelClass = 'nivel-normal';
+        if (altura >= evacua)  nivelClass = 'nivel-evacuacion';
+        else if (altura >= alerta) nivelClass = 'nivel-alerta';
+
+        const varSign = variacion > 0 ? '+' : '';
+        const varStr  = variacion !== 0 ? `${varSign}${variacion.toFixed(2)}m` : '0.00m';
+
+        html += `<div class="rio-pref-card ${nivelClass}">
+          <div class="rio-pref-nombre">${escHtml(r.estacion)}</div>
+          <div class="rio-pref-datos">
+            <div class="rio-pref-altura">${altura.toFixed(2)}<span class="rio-pref-unit">m</span></div>
+            <div class="rio-pref-flecha ${flechaClass}">${flecha}</div>
+            <div class="rio-pref-variacion ${variacion >= 0 ? 'var-pos' : 'var-neg'}">${varStr}</div>
+          </div>
+          <div class="rio-pref-meta">
+            <span>Alerta: ${alerta}m</span>
+            <span>Evacua: ${evacua}m</span>
+            <span class="rio-pref-fecha">${escHtml(r.fecha || '')}</span>
+          </div>
+        </div>`;
+      });
+    });
+
+    el.innerHTML = html;
+
+    // Botón para abrir PDF del día
+    const hoy = new Date();
+    const dd = String(hoy.getDate()).padStart(2,'0');
+    const mm = String(hoy.getMonth()+1).padStart(2,'0');
+    const yyyy = hoy.getFullYear();
+    // URL del PDF de Prefectura (formato conocido)
+    const pdfUrl = `https://contenidosweb.prefecturanaval.gob.ar/alturas/pdf/alturas_${dd}-${mm}.pdf`;
+    const linkPdf = document.getElementById('link-pdf-rios');
+    if (linkPdf) {
+      linkPdf.href = pdfUrl;
+      linkPdf.addEventListener('click', (e) => {
+        e.preventDefault();
+        abrirVisorPDF(pdfUrl);
+      });
+    }
+  }
+
+  function abrirVisorPDF(url) {
+    const wrap   = document.getElementById('pdf-viewer-wrap');
+    const iframe = document.getElementById('pdf-iframe');
+    const closeBtn = document.getElementById('pdf-close-btn');
+    // Usar Google Docs Viewer como proxy para mostrar el PDF dentro de la app
+    iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
+    wrap.style.display = 'block';
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    closeBtn.onclick = () => {
+      wrap.style.display = 'none';
+      iframe.src = '';
+    };
+  }
+
+    function renderRiosManual(data) {
     const el = document.getElementById('rios-manual-content');
     if (!data || !data.length) { el.innerHTML = '<p class="empty-msg">Sin registros cargados aún.<br>Cargalos en la hoja rios_manual del Sheets.</p>'; return; }
     el.innerHTML = [...data].reverse().slice(0,5).map(r => `
@@ -308,9 +402,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function tarjetaFarmacia(f, esHoyFlag) {
+    const maps = f.maps_url || f['maps_url '] || '';
     return `<div class="farmacia-card ${esHoyFlag ? 'farmacia-hoy-card' : ''}">
       ${esHoyFlag ? '<div class="farmacia-badge">HOY</div>' : `<div class="farmacia-fecha">${escHtml(f.fecha)}</div>`}
-      <div class="farmacia-nombre">${escHtml(f.nombre)}</div>
+      <div class="farmacia-top">
+        <div class="farmacia-nombre">${escHtml(f.nombre)}</div>
+        ${maps ? `<a class="contacto-btn btn-maps" href="${escHtml(maps)}" target="_blank" rel="noopener" aria-label="Ver en mapa" style="flex-shrink:0">🗺️</a>` : ''}
+      </div>
       <div class="farmacia-dir">📍 ${escHtml(f.direccion)}</div>
       ${f.telefono  ? `<a class="farmacia-tel" href="tel:${escHtml(f.telefono)}">📞 ${escHtml(f.telefono)}</a>` : ''}
       ${f.horario   ? `<div class="farmacia-horario">🕐 ${escHtml(f.horario)}</div>` : ''}
@@ -355,65 +453,111 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ─── 9. YOUTUBE ───────────────────────────────────────────────────────────
+  // ─── YOUTUBE: Live multiplatforma + Grabados por programa ───────────────
   async function renderYouTube() {
     const data = await fetchData('youtube');
-    if (!data.length) return;
-    const enVivo   = data.filter(v => v.tipo === 'en_vivo');
-    const grabados = data.filter(v => v.tipo === 'grabado');
-
-    if (enVivo.length) activarBannerLive(enVivo[0]);
-
     const liveList = document.getElementById('yt-live-list');
     liveList.innerHTML = '';
+
+    // Separar por tipo
+    const enVivo   = (data || []).filter(v => v.tipo === 'en_vivo');
+    const grabados = (data || []).filter(v => v.tipo === 'grabado');
+
+    // ── BANNER: mostrar el primer live activo (cualquier plataforma) ────────
+    if (enVivo.length > 0) activarBannerLiveMulti(enVivo);
+
+    // ── TAB EN VIVO ─────────────────────────────────────────────────────────
     if (!enVivo.length) {
-      liveList.innerHTML = '<p class="empty-msg">No hay streams en vivo ahora.<br>El banner rojo aparecerá cuando haya transmisión.</p>';
+      liveList.innerHTML = '<p class="empty-msg">No hay transmisiones en vivo ahora.<br>El banner rojo aparecerá automáticamente cuando comience un live.</p>';
     } else {
       enVivo.forEach(v => {
+        const plat = detectarPlataforma(v);
         const card = document.createElement('div');
         card.className = 'yt-live-card';
         card.innerHTML = `
-          <div class="yt-live-badge">🔴 EN VIVO</div>
+          <div class="yt-live-badge" style="background:${plat.color}">${plat.icono} EN VIVO · ${plat.nombre}</div>
           <div class="yt-thumb-wrap">
-            <img class="yt-thumb" src="https://img.youtube.com/vi/${escHtml(v.video_id)}/mqdefault.jpg" alt="${escHtml(v.titulo)}">
+            <img class="yt-thumb" src="${thumbUrl(v)}" alt="${escHtml(v.titulo)}"
+              onerror="this.src='${CONFIG.IMG_RADIO}'">
             <div class="yt-play-overlay">▶</div>
           </div>
           <div class="yt-card-info">
             <div class="yt-card-title">${escHtml(v.titulo)}</div>
             <div class="yt-card-desc">${escHtml(v.descripcion||'')}</div>
             <div class="yt-card-actions">
-              <button class="yt-btn-watch">▶ Ver en la app</button>
-              <a class="yt-btn-yt" href="https://youtube.com/watch?v=${escHtml(v.video_id)}" target="_blank" rel="noopener">↗ YouTube</a>
+              ${plat.embebible
+                ? `<button class="yt-btn-watch">▶ Ver en la app</button>`
+                : `<a class="yt-btn-watch" href="${escHtml(v.stream_url||v.video_id)}" target="_blank" rel="noopener">↗ Ver en ${plat.nombre}</a>`
+              }
+              <a class="yt-btn-yt" href="${escHtml(v.stream_url || 'https://youtube.com/watch?v='+v.video_id)}" target="_blank" rel="noopener">↗ Abrir en ${plat.nombre}</a>
             </div>
           </div>`;
-        card.querySelector('.yt-btn-watch').addEventListener('click', () => loadYouTubePlayer(v.video_id, v.titulo, true));
-        card.querySelector('.yt-thumb-wrap').addEventListener('click', () => loadYouTubePlayer(v.video_id, v.titulo, true));
+        if (plat.embebible) {
+          card.querySelector('.yt-btn-watch').addEventListener('click', () =>
+            loadYouTubePlayer(v.video_id, v.titulo, true));
+        }
+        card.querySelector('.yt-thumb-wrap').addEventListener('click', () => {
+          if (plat.embebible) loadYouTubePlayer(v.video_id, v.titulo, true);
+          else window.open(v.stream_url || `https://youtube.com/watch?v=${v.video_id}`, '_blank');
+        });
         liveList.appendChild(card);
       });
     }
 
-    const recGrid = document.getElementById('yt-recorded-list');
-    recGrid.innerHTML = '';
+    // ── TAB GRABADOS: agrupados por programa ────────────────────────────────
+    const selector = document.getElementById('yt-programa-selector');
+    const grid     = document.getElementById('yt-recorded-list');
+    selector.innerHTML = '';
+    grid.innerHTML = '';
+
     if (!grabados.length) {
-      recGrid.innerHTML = '<p class="empty-msg">No hay videos grabados cargados aún.</p>';
+      grid.innerHTML = '<p class="empty-msg">No hay videos grabados cargados aún.</p>';
     } else {
-      grabados.forEach(v => {
-        const card = document.createElement('div');
-        card.className = 'yt-rec-card';
-        card.innerHTML = `
-          <div class="yt-thumb-wrap">
-            <img class="yt-thumb" src="https://img.youtube.com/vi/${escHtml(v.video_id)}/mqdefault.jpg" alt="${escHtml(v.titulo)}">
-            <div class="yt-play-overlay">▶</div>
-          </div>
-          <div class="yt-rec-info">
-            <div class="yt-card-title">${escHtml(v.titulo)}</div>
-            <div class="yt-card-meta">${escHtml(v.fecha||'')} ${v.duracion ? '· '+escHtml(v.duracion) : ''}</div>
-            <div class="yt-card-desc">${escHtml(v.descripcion||'')}</div>
-          </div>`;
-        card.addEventListener('click', () => loadYouTubePlayer(v.video_id, v.titulo, false));
-        recGrid.appendChild(card);
+      // Obtener programas únicos preservando orden
+      const programas = [...new Set(grabados.map(v => v.programa || 'Sin programa'))];
+      let programaActivo = programas[0];
+
+      function renderPrograma(prog) {
+        programaActivo = prog;
+        // Actualizar botones del selector
+        selector.querySelectorAll('.prog-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.prog === prog));
+        // Renderizar videos
+        const videos = grabados.filter(v => (v.programa || 'Sin programa') === prog);
+        grid.innerHTML = '';
+        videos.forEach(v => {
+          const card = document.createElement('div');
+          card.className = 'yt-rec-card';
+          card.innerHTML = `
+            <div class="yt-thumb-wrap">
+              <img class="yt-thumb" src="${thumbUrl(v)}" alt="${escHtml(v.titulo)}"
+                onerror="this.src='${CONFIG.IMG_RADIO}'">
+              <div class="yt-play-overlay">▶</div>
+            </div>
+            <div class="yt-rec-info">
+              <div class="yt-card-title">${escHtml(v.titulo)}</div>
+              <div class="yt-card-meta">${escHtml(v.fecha||'')}${v.duracion ? ' · ⏱ '+escHtml(v.duracion) : ''}</div>
+              <div class="yt-card-desc">${escHtml(v.descripcion||'')}</div>
+            </div>`;
+          card.addEventListener('click', () => loadYouTubePlayer(v.video_id, v.titulo, false));
+          grid.appendChild(card);
+        });
+      }
+
+      // Crear botones de selector de programa
+      programas.forEach(prog => {
+        const btn = document.createElement('button');
+        btn.className = 'prog-btn' + (prog === programaActivo ? ' active' : '');
+        btn.dataset.prog = prog;
+        btn.textContent = prog;
+        btn.addEventListener('click', () => renderPrograma(prog));
+        selector.appendChild(btn);
       });
+
+      renderPrograma(programaActivo);
     }
 
+    // ── Tabs internos ───────────────────────────────────────────────────────
     document.querySelectorAll('.yt-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.yt-tab').forEach(t => t.classList.remove('active'));
@@ -422,6 +566,46 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('ytab-' + tab.dataset.ytab).classList.add('active');
       });
     });
+  }
+
+  // Detectar plataforma según el video_id o stream_url
+  function detectarPlataforma(v) {
+    const url = (v.stream_url || v.video_id || '').toLowerCase();
+    if (url.includes('facebook') || url.includes('fb.watch') || v.plataforma === 'facebook')
+      return { nombre: 'Facebook', icono: '🔵', color: '#1877F2', embebible: false };
+    if (url.includes('instagram') || v.plataforma === 'instagram')
+      return { nombre: 'Instagram', icono: '📷', color: '#E1306C', embebible: false };
+    // Por defecto YouTube
+    return { nombre: 'YouTube', icono: '▶', color: '#FF0000', embebible: true };
+  }
+
+  // Thumbnail automático: YouTube por video_id, fallback a logo
+  function thumbUrl(v) {
+    if (v.thumbnail_url && v.thumbnail_url.trim()) return v.thumbnail_url.trim();
+    if (v.video_id && !v.video_id.includes('http'))
+      return `https://img.youtube.com/vi/${v.video_id}/mqdefault.jpg`;
+    return CONFIG.IMG_RADIO;
+  }
+
+  // Banner live multiplatforma: muestra el primer live, con botones de todas las plataformas
+  function activarBannerLiveMulti(lives) {
+    const banner = document.getElementById('live-banner');
+    const v = lives[0];
+    const plat = detectarPlataforma(v);
+    document.getElementById('live-banner-title').textContent =
+      (v.titulo || 'FM TRADICIÓN EN VIVO').toUpperCase();
+    document.getElementById('live-banner-sub').textContent =
+      `${plat.icono} ${plat.nombre}${lives.length > 1 ? ` · +${lives.length-1} transmisión(es) activa(s)` : ''}`;
+    banner.style.display = 'block';
+
+    document.getElementById('live-cta-btn').onclick = () => {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(vv => vv.classList.remove('active'));
+      document.querySelector('[data-target="youtube"]').classList.add('active');
+      document.getElementById('youtube').classList.add('active');
+      if (plat.embebible) loadYouTubePlayer(v.video_id, v.titulo, true);
+      else window.open(v.stream_url, '_blank');
+    };
   }
 
   function activarBannerLive(video) {
@@ -489,22 +673,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ─── 11. AUDIOTECA ────────────────────────────────────────────────────────
+  // ─── 11. AUDIOTECA con carpetas por programa ─────────────────────────────
   async function renderAudioteca() {
     const data = await fetchData('audioteca');
     const el   = document.getElementById('audio-list');
     el.innerHTML = '';
     if (!data.length) { el.innerHTML = '<p class="empty-msg">No hay audios disponibles.</p>'; return; }
-    data.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'list-item';
-      div.innerHTML = `
-        <h3>${escHtml(item.titulo)}</h3>
-        <p class="meta">${escHtml(item.fecha||'')} | ⏱ ${escHtml(String(item.duracion||''))}</p>
-        <audio controls style="width:100%;margin-top:8px;" src="${escHtml(item.url_audio||'')}"></audio>
-        <p style="margin-top:8px;">${escHtml(item.descripcion||'')}</p>`;
-      el.appendChild(div);
+
+    // Agrupar por programa
+    const programas = [...new Set(data.map(a => a.programa || 'General'))];
+    let progActivo = programas[0];
+
+    // Selector de programa
+    const selectorEl = document.createElement('div');
+    selectorEl.className = 'programa-selector';
+    el.appendChild(selectorEl);
+
+    const contentEl = document.createElement('div');
+    el.appendChild(contentEl);
+
+    function renderAudioPrograma(prog) {
+      progActivo = prog;
+      selectorEl.querySelectorAll('.prog-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.prog === prog));
+      contentEl.innerHTML = '';
+      const items = data.filter(a => (a.programa || 'General') === prog);
+      items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.innerHTML = `
+          <h3>${escHtml(item.titulo)}</h3>
+          <p class="meta">${escHtml(item.fecha||'')} | ⏱ ${escHtml(String(item.duracion||''))}</p>
+          <audio controls style="width:100%;margin-top:8px;" src="${escHtml(item.url_audio||'')}"></audio>
+          <p style="margin-top:8px;">${escHtml(item.descripcion||'')}</p>`;
+        contentEl.appendChild(div);
+      });
+    }
+
+    programas.forEach(prog => {
+      const btn = document.createElement('button');
+      btn.className = 'prog-btn' + (prog === progActivo ? ' active' : '');
+      btn.dataset.prog = prog;
+      btn.textContent = prog;
+      btn.addEventListener('click', () => renderAudioPrograma(prog));
+      selectorEl.appendChild(btn);
     });
+
+    renderAudioPrograma(progActivo);
   }
 
   // ─── 12. GALERÍA ──────────────────────────────────────────────────────────
@@ -563,6 +778,74 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('.hero').style.backgroundImage =
     `linear-gradient(rgba(139,0,0,0.7),rgba(139,0,0,0.7)),url('${CONFIG.IMG_HERO}')`;
 
+
+  // ─── CONTACTOS ÚTILES ────────────────────────────────────────────────────
+  async function renderContactos() {
+    const data = await fetchData('contactos');
+    const el   = document.getElementById('contactos-list');
+    if (!el) return;
+    el.innerHTML = '';
+
+    if (!data || !data.length) {
+      el.innerHTML = '<p class="empty-msg">Cargá los contactos en la hoja <strong>contactos</strong> del Sheets.</p>';
+      return;
+    }
+
+    // Agrupar por categoria
+    const grupos = {};
+    data.forEach(c => {
+      const cat = c.categoria || 'Otros';
+      if (!grupos[cat]) grupos[cat] = [];
+      grupos[cat].push(c);
+    });
+
+    // Íconos por categoría
+    const iconos = {
+      'Emergencias':       '🚨',
+      'Salud':             '🏥',
+      'Seguridad':         '👮',
+      'Bomberos':          '🚒',
+      'Defensa Civil':     '⛑️',
+      'Justicia':          '⚖️',
+      'Municipio':         '🏛️',
+      'PAMI / ANSES':      '📋',
+      'Clínicas':          '🏨',
+      'Farmacias 24h':     '💊',
+      'Otros':             '📞',
+    };
+
+    Object.entries(grupos).forEach(([cat, items]) => {
+      const grupo = document.createElement('div');
+      grupo.className = 'contacto-grupo';
+      grupo.innerHTML = `<div class="contacto-grupo-titulo">${iconos[cat] || '📞'} ${escHtml(cat)}</div>`;
+
+      items.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'contacto-card';
+
+        const tel    = (c.telefono || '').replace(/\s/g,'');
+        const maps   = c.maps_url  || '';
+        const web    = c.web_url   || '';
+        const wa     = c.whatsapp  || '';
+
+        card.innerHTML = `
+          <div class="contacto-info">
+            <div class="contacto-nombre">${escHtml(c.nombre)}</div>
+            ${c.descripcion ? `<div class="contacto-desc">${escHtml(c.descripcion)}</div>` : ''}
+            ${c.direccion   ? `<div class="contacto-dir">📍 ${escHtml(c.direccion)}</div>` : ''}
+          </div>
+          <div class="contacto-acciones">
+            ${tel  ? `<a class="contacto-btn btn-tel"  href="tel:${tel}"  aria-label="Llamar">📞</a>` : ''}
+            ${wa   ? `<a class="contacto-btn btn-wa"   href="https://wa.me/${wa.replace(/\D/g,'')}" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>` : ''}
+            ${maps ? `<a class="contacto-btn btn-maps" href="${escHtml(maps)}" target="_blank" rel="noopener" aria-label="Ver en mapa">🗺️</a>` : ''}
+            ${web  ? `<a class="contacto-btn btn-web"  href="${escHtml(web)}"  target="_blank" rel="noopener" aria-label="Sitio web">🌐</a>` : ''}
+          </div>`;
+        grupo.appendChild(card);
+      });
+
+      el.appendChild(grupo);
+    });
+  }
   // ─── ARRANQUE ─────────────────────────────────────────────────────────────
   initConfig().then(cfg => {
     initRedesPanel(cfg);
@@ -577,4 +860,5 @@ document.addEventListener('DOMContentLoaded', () => {
   renderProgramacion();
   renderAudioteca();
   renderGaleria();
+  renderContactos();
 });
