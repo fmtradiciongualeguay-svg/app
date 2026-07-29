@@ -399,81 +399,9 @@ document.addEventListener('DOMContentLoaded', () => {
   el.addEventListener('touchstart', () => clearInterval(timer), { passive: true });
 }
 
-    // Agrupar por río
-    const grupos = {};
-    data.forEach(r => {
-      const rio = r.rio || 'Otros';
-      if (!grupos[rio]) grupos[rio] = [];
-      grupos[rio].push(r);
-    });
-
-    let html = '';
-    Object.entries(grupos).forEach(([rio, estaciones]) => {
-      html += `<div class="rio-grupo-titulo">${escHtml(rio)}</div>`;
-      estaciones.forEach(r => {
-        const altura    = parseFloat(r.altura_m) || 0;
-        const variacion = parseFloat(r.variacion_m) || 0;
-        const alerta    = parseFloat(r.alerta_m) || 999;
-        const evacua    = parseFloat(r.evacuacion_m) || 999;
-        const estado    = (r.estado || '').trim().toUpperCase();
-
-        // Flecha y color de tendencia
-        let flecha = '➡️', flechaClass = 'estac';
-        if (estado === 'CRECE')        { flecha = '↑'; flechaClass = 'crece'; }
-        else if (estado === 'BAJA')    { flecha = '↓'; flechaClass = 'baja';  }
-        else if (estado === 'ALERTA')  { flecha = '⚠️'; flechaClass = 'alerta'; }
-        else if (estado.includes('EVACUA')) { flecha = '🚨'; flechaClass = 'evacuacion'; }
-
-        // Semáforo de nivel
-        let nivelClass = 'nivel-normal';
-        if (altura >= evacua)  nivelClass = 'nivel-evacuacion';
-        else if (altura >= alerta) nivelClass = 'nivel-alerta';
-
-        const varSign = variacion > 0 ? '+' : '';
-        const varStr  = variacion !== 0 ? `${varSign}${variacion.toFixed(2)}m` : '0.00m';
-
-        html += `<div class="rio-pref-card ${nivelClass}">
-          <div class="rio-pref-nombre">${escHtml(r.estacion)}</div>
-          <div class="rio-pref-datos">
-            <div class="rio-pref-altura">${altura.toFixed(2)}<span class="rio-pref-unit">m</span></div>
-            <div class="rio-pref-flecha ${flechaClass}">${flecha}</div>
-            <div class="rio-pref-variacion ${variacion >= 0 ? 'var-pos' : 'var-neg'}">${varStr}</div>
-          </div>
-          <div class="rio-pref-meta">
-            <span>Alerta: ${alerta}m</span>
-            <span>Evacua: ${evacua}m</span>
-            <span class="rio-pref-fecha">${escHtml(r.fecha || '')}</span>
-          </div>
-        </div>`;
-      });
-    });
-
-    el.innerHTML = html;
-
-    // Botón PDF: abre la página oficial de Prefectura Naval directamente
-    // No usamos visor embebido porque Prefectura no tiene URL de PDF predecible.
-    // La página web es pública y tiene los datos actualizados en tiempo real.
-    const URL_PREFECTURA = 'https://contenidosweb.prefecturanaval.gob.ar/alturas/';
-    const linkPdf = document.getElementById('link-pdf-rios');
-    if (linkPdf) {
-      linkPdf.href = URL_PREFECTURA;
-      linkPdf.textContent = '🌐 Ver datos oficiales';
-      linkPdf.removeEventListener('click', linkPdf._handler);
-    }
-  }
-
   function abrirVisorPDF(url) {
-    const wrap   = document.getElementById('pdf-viewer-wrap');
-    const iframe = document.getElementById('pdf-iframe');
-    const closeBtn = document.getElementById('pdf-close-btn');
-    // Usar Google Docs Viewer como proxy para mostrar el PDF dentro de la app
-    iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
-    wrap.style.display = 'block';
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    closeBtn.onclick = () => {
-      wrap.style.display = 'none';
-      iframe.src = '';
-    };
+    // Abrir en nueva pestaña — el visor embebido fue removido del HTML
+    window.open(url, '_blank', 'noopener');
   }
 
     function renderRiosManual(data) {
@@ -770,8 +698,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const dArr = (item.dias_emision||'').split(',').map(d=>d.trim());
       let live = false;
       if (dArr.includes(today) && item.hora_inicio && item.hora_fin) {
-        // Las horas pueden venir como "HH:MM" o como objeto Time serializado "HH:MM:SS"
-        const parseH = s => { const p = String(s).split(':'); return Number(p[0]) + Number(p[1]||0)/60; };
+        // Las horas pueden venir como:
+        //   "HH:MM" / "HH:MM:SS"  → formato texto
+        //   0.8333...              → fracción decimal de Excel (días: 0.5 = 12:00, 0.875 = 21:00)
+        const parseH = s => {
+          const n = Number(s);
+          if (!isNaN(n) && String(s).indexOf(':') === -1) {
+            // Fracción decimal Excel: multiplicar por 24 para obtener horas
+            return n * 24;
+          }
+          const p = String(s).split(':');
+          return Number(p[0]) + Number(p[1]||0)/60;
+        };
         const s = parseH(item.hora_inicio), e2 = parseH(item.hora_fin);
         const end = e2 < s ? e2+24 : e2;
         if (cur >= s && cur < end) live = true;
@@ -781,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
       div.innerHTML = `
         <h3>${escHtml(item.programa)} ${live ? '<span class="live-badge">● EN VIVO</span>' : ''}</h3>
         <p><strong>Locutor/a:</strong> ${escHtml(item.locutor)}</p>
-        <p class="meta">${escHtml(item.dias_emision)} | ${escHtml(String(item.hora_inicio||''))} – ${escHtml(String(item.hora_fin||''))}</p>
+        <p class="meta">${escHtml(item.dias_emision)} | ${fmtHora(item.hora_inicio)} – ${fmtHora(item.hora_fin)}</p>
         <p>${escHtml(item.descripcion||'')}</p>`;
       el.appendChild(div);
     });
@@ -865,6 +803,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ─── UTILIDADES ───────────────────────────────────────────────────────────
+
+  // Convierte hora en fracción decimal de Excel (ej: 0.875) o "HH:MM[:SS]" a "HH:MM"
+  function fmtHora(s) {
+    if (!s && s !== 0) return '';
+    const n = Number(s);
+    if (!isNaN(n) && String(s).indexOf(':') === -1) {
+      const totalMin = Math.round(n * 24 * 60);
+      const h = Math.floor(totalMin / 60) % 24;
+      const m = totalMin % 60;
+      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    }
+    // Ya es texto HH:MM[:SS] — devolver solo HH:MM
+    return String(s).slice(0, 5);
+  }
+
   function escHtml(s) {
     if (s==null) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -975,29 +928,30 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAudioteca();
   renderGaleria();
   renderContactos();
-});
 
-// Volumen
-audio.volume = 0.8;
-const btnVolUp   = document.getElementById('btn-vol-up');
-const btnVolDown = document.getElementById('btn-vol-down');
-const eqBars     = document.getElementById('eq-bars');
-const dialNeedle = document.getElementById('dial-needle');
+  // ─── VOLUMEN Y ANIMACIONES ────────────────────────────────────────────────
+  audio.volume = 0.8;
+  const btnVolUp   = document.getElementById('btn-vol-up');
+  const btnVolDown = document.getElementById('btn-vol-down');
+  const eqBars     = document.getElementById('eq-bars');
+  const dialNeedle = document.getElementById('dial-needle');
 
-btnVolUp.addEventListener('click', () => {
-  audio.volume = Math.min(1, audio.volume + 0.1);
-});
-btnVolDown.addEventListener('click', () => {
-  audio.volume = Math.max(0, audio.volume - 0.1);
-});
+  btnVolUp.addEventListener('click', () => {
+    audio.volume = Math.min(1, audio.volume + 0.1);
+  });
+  btnVolDown.addEventListener('click', () => {
+    audio.volume = Math.max(0, audio.volume - 0.1);
+  });
 
-// Activar/desactivar animaciones según estado
-function setPlayerAnimations(playing) {
-  if (playing) {
-    eqBars.classList.add('active');
-    dialNeedle.classList.add('active');
-  } else {
-    eqBars.classList.remove('active');
-    dialNeedle.classList.remove('active');
+  // Activar/desactivar animaciones según estado
+  function setPlayerAnimations(playing) {
+    if (playing) {
+      eqBars.classList.add('active');
+      dialNeedle.classList.add('active');
+    } else {
+      eqBars.classList.remove('active');
+      dialNeedle.classList.remove('active');
+    }
   }
-}
+
+});
