@@ -225,13 +225,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderWidgetClima(clima);
     renderClimaSectionExt(clima);
 
-    // Ríos — solo manual (scraping hidráulica también da 403 desde GAS)
+    // Ríos — manual como fallback
     const rioManual = await fetchData('rios_manual');
     renderWidgetRios(rioManual);
     renderRiosManual(rioManual);
 
-    // Ríos Prefectura Naval con flechas
+    // Ríos Prefectura Naval — actualiza widget del inicio + sección Info Local
     const riosPref = await fetchData('rios_prefectura');
+    renderWidgetRiosPrefectura(riosPref);
     renderRiosPrefectura(riosPref);
 
     // Farmacia
@@ -255,9 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>`;
   }
 
-  function renderWidgetRios(data) {
+  function renderWidgetRios(manual) {
+    // Fallback con datos manuales; Prefectura lo sobreescribe si tiene datos
     const el = document.getElementById('widget-rios');
-    const ultimo = data && data.length > 0 ? [...data].reverse()[0] : null;
+    if (el.dataset.loaded === '1') return;
+    const ultimo = manual && manual.length > 0 ? [...manual].reverse()[0] : null;
     if (!ultimo) { el.innerHTML = '<div class="widget-error">🌊 Sin datos</div>'; return; }
     el.innerHTML = `
       <div class="widget-icon">🌊</div>
@@ -266,6 +269,47 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="widget-value">${escHtml(String(ultimo.altura))} ${escHtml(ultimo.unidad || 'cm')}</div>
         <div class="widget-sub">${escHtml(ultimo.fecha || '')}</div>
       </div>`;
+  }
+
+  function renderWidgetRiosPrefectura(data) {
+    const el = document.getElementById('widget-rios');
+    if (!data || !data.length) return;
+    el.dataset.loaded = '1';
+    let idx = 0;
+    const items = data;
+
+    function mostrar(i) {
+      const r = items[i];
+      const altura    = parseFloat(r.altura_m) || 0;
+      const variacion = parseFloat(r.variacion_m) || 0;
+      const estado    = (r.estado || '').trim().toUpperCase();
+      let flecha = '➡️';
+      if (estado === 'CRECE')             flecha = '↑';
+      else if (estado === 'BAJA')         flecha = '↓';
+      else if (estado === 'ALERTA')       flecha = '⚠️';
+      else if (estado.includes('EVACUA')) flecha = '🚨';
+      const varSign = variacion > 0 ? '+' : '';
+      const varStr  = `${varSign}${variacion.toFixed(2)}m`;
+      el.innerHTML = `
+        <div class="widget-icon" style="font-size:1.4rem">🌊</div>
+        <div class="widget-body" style="min-width:0;flex:1">
+          <div class="widget-label" style="display:flex;align-items:center;gap:4px">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escHtml(r.estacion || r.rio || '')}</span>
+            <span style="font-size:.65rem;color:#999">${i+1}/${items.length}</span>
+          </div>
+          <div class="widget-value" style="display:flex;align-items:baseline;gap:4px">
+            <span>${altura.toFixed(2)}m</span>
+            <span style="font-size:.85rem">${flecha}</span>
+            <span style="font-size:.68rem;color:${variacion>=0?'#E74C3C':'#2980B9'}">${varStr}</span>
+          </div>
+          <div class="widget-sub">${escHtml(r.fecha || '')}</div>
+        </div>`;
+    }
+
+    mostrar(0);
+    setInterval(() => { idx = (idx + 1) % items.length; mostrar(idx); }, 3500);
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => { idx = (idx + 1) % items.length; mostrar(idx); });
   }
 
   function renderWidgetFarmacia(data) {
@@ -357,6 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>`;
   });
 
+  // Buscar si alguna fila tiene pdf_url (Drive) para mostrarlo como link
+  const pdfUrl = (data.find(r => r.pdf_url && r.pdf_url.trim()) || {}).pdf_url || '';
+
   el.innerHTML = `
     <div class="slider-wrapper" id="slider-rios" style="background:transparent;box-shadow:none;">
       <div class="slider-track">${slidesHtml}</div>
@@ -366,6 +413,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="pub-dots" id="rios-dots" style="position:static;justify-content:center;margin-top:8px;"></div>
     <p class="info-source" style="margin-top:8px;text-align:center;">
       Fuente: Prefectura Naval Argentina ·
+      ${pdfUrl
+        ? `<a class="info-source-link" href="${escHtml(pdfUrl)}" target="_blank" rel="noopener">📄 Ver PDF oficial</a> ·`
+        : ''}
       <a class="info-source-link" href="https://contenidosweb.prefecturanaval.gob.ar/alturas/" target="_blank" rel="noopener">🌐 Ver datos oficiales</a>
     </p>`;
 
@@ -423,6 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('farmacia-ext-content');
     if (!data || !data.length) { el.innerHTML = '<p class="empty-msg">Sin datos. Cargalos en el Sheets.</p>'; return; }
     // Normalizar nombres de columna (tienen espacios en el Sheets actual)
+    const esUrlValida = v => v && (v.startsWith('http') || v.startsWith('//'));
     const norm = data.map(f => ({
       nombre:      f.nombre      || f['nombre ']      || '',
       direccion:   f.direccion   || f['direccion ']   || '',
@@ -430,8 +481,11 @@ document.addEventListener('DOMContentLoaded', () => {
       fecha:       f.fecha       || '',
       horario:     f.horario     || '',
       observacion: f.observacion || f['observacion '] || '',
-      // maps: acepta 'maps_url', 'indicaciones' o variantes con espacios
-      maps_url:    f.maps_url    || f['maps_url ']    || f['indicaciones'] || f['indicaciones '] || f[' indicaciones'] || '',
+      // maps_url: solo si es una URL real (no texto como "Como llegar")
+      maps_url: (() => {
+        const raw = f.maps_url || f['maps_url '] || f['indicaciones'] || f['indicaciones '] || f[' indicaciones'] || '';
+        return esUrlValida(raw) ? raw : '';
+      })(),
     }));
     const hoy      = norm.filter(f => esHoy(f.fecha));
     const proximos = norm.filter(f => !esHoy(f.fecha) && esFuturo(f.fecha)).slice(0,4);
@@ -444,7 +498,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function tarjetaFarmacia(f, esHoyFlag) {
-    const maps = f.maps_url || f['maps_url '] || '';
+    const mapsRaw = f.maps_url || f['maps_url '] || '';
+    const maps = (mapsRaw.startsWith('http') || mapsRaw.startsWith('//')) ? mapsRaw : '';
     return `<div class="farmacia-card ${esHoyFlag ? 'farmacia-hoy-card' : ''}">
       ${esHoyFlag ? '<div class="farmacia-badge">HOY</div>' : `<div class="farmacia-fecha">${escHtml(f.fecha)}</div>`}
       <div class="farmacia-top">
