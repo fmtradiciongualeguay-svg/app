@@ -1,5 +1,5 @@
 // FIX: versión del cache — cambiá este número en cada deploy para forzar actualización
-const CACHE_NAME = 'fm-tradicion-v8';
+const CACHE_NAME = 'fm-tradicion-v9';
 
 const ASSETS_TO_CACHE = [
   './',

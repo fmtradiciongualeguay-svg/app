@@ -1,5 +1,41 @@
 document.addEventListener('DOMContentLoaded', () => {
 
+  // ─── 0. MODO OSCURO ───────────────────────────────────────────────────────
+(function initModoOscuro() {
+  const toggle = document.getElementById('dark-toggle');
+  if (!toggle) { console.warn('[Tema] Falta el botón #dark-toggle en index.html'); return; }
+
+  // persistir=true SOLO cuando el usuario elige manualmente.
+  // Si nunca tocó el botón, la app sigue al sistema operativo.
+  const aplicarTema = (tema, persistir) => {
+    document.documentElement.setAttribute('data-theme', tema);
+    toggle.textContent = tema === 'dark' ? '☀️' : '🌙';
+    toggle.setAttribute('aria-label', tema === 'dark' ? 'Modo claro' : 'Modo oscuro');
+    if (persistir) { try { localStorage.setItem('fm-theme', tema); } catch (e) {} }
+  };
+
+  let guardado = null;
+  try { guardado = localStorage.getItem('fm-theme'); } catch (e) {}
+
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  aplicarTema(guardado || (mq && mq.matches ? 'dark' : 'light'), false);
+
+  toggle.addEventListener('click', () => {
+    const actual = document.documentElement.getAttribute('data-theme');
+    aplicarTema(actual === 'dark' ? 'light' : 'dark', true);
+  });
+
+  // Si el usuario nunca eligió, sincronizar con el SO en tiempo real
+  if (mq) {
+    const onCambio = (e) => {
+      let manual = null;
+      try { manual = localStorage.getItem('fm-theme'); } catch (err) {}
+      if (!manual) aplicarTema(e.matches ? 'dark' : 'light', false);
+    };
+    mq.addEventListener ? mq.addEventListener('change', onCambio) : mq.addListener(onCambio);
+  }
+})();
+
   // ─── 1. CONFIG DESDE SHEETS (hoja configuracion) ─────────────────────────
   // Se carga primero para tener redes, WA, etc. disponibles
   async function initConfig() {
@@ -274,13 +310,94 @@ document.addEventListener('DOMContentLoaded', () => {
       <p class="info-source" style="margin-top:8px">Fuente: Open-Meteo · Gratis · Sin registro</p>`;
   }
 
-  // ─── RÍOS PREFECTURA NAVAL con flechas de tendencia ─────────────────────
   function renderRiosPrefectura(data) {
-    const el = document.getElementById('rios-prefectura-content');
-    if (!data || !data.length) {
-      el.innerHTML = '<p class="empty-msg">Sin datos de Prefectura.<br>Cargalos en la hoja <strong>rios_prefectura</strong> del Sheets.</p>';
-      return;
-    }
+  const el = document.getElementById('rios-prefectura-content');
+  if (!data || !data.length) {
+    el.innerHTML = '<p class="empty-msg">Sin datos de Prefectura.<br>Cargalos en la hoja <strong>rios_prefectura</strong> del Sheets.</p>';
+    return;
+  }
+
+  // Construir cards como slides
+  let slidesHtml = '';
+  data.forEach(r => {
+    const altura    = parseFloat(r.altura_m) || 0;
+    const variacion = parseFloat(r.variacion_m) || 0;
+    const alerta    = parseFloat(r.alerta_m) || 999;
+    const evacua    = parseFloat(r.evacuacion_m) || 999;
+    const estado    = (r.estado || '').trim().toUpperCase();
+
+    let flecha = '➡️', flechaClass = 'estac';
+    if (estado === 'CRECE')             { flecha = '↑'; flechaClass = 'crece'; }
+    else if (estado === 'BAJA')         { flecha = '↓'; flechaClass = 'baja'; }
+    else if (estado === 'ALERTA')       { flecha = '⚠️'; flechaClass = 'alerta'; }
+    else if (estado.includes('EVACUA')) { flecha = '🚨'; flechaClass = 'evacuacion'; }
+
+    let nivelClass = 'nivel-normal';
+    if (altura >= evacua)       nivelClass = 'nivel-evacuacion';
+    else if (altura >= alerta)  nivelClass = 'nivel-alerta';
+
+    const varSign = variacion > 0 ? '+' : '';
+    const varStr  = variacion !== 0 ? `${varSign}${variacion.toFixed(2)}m` : '0.00m';
+
+    slidesHtml += `
+      <div class="slider-slide">
+        <div class="rio-pref-card ${nivelClass}" style="margin:8px;height:calc(100% - 16px);">
+          <div class="rio-pref-nombre">${escHtml(r.rio || '')} — ${escHtml(r.estacion)}</div>
+          <div class="rio-pref-datos">
+            <div class="rio-pref-altura">${altura.toFixed(2)}<span class="rio-pref-unit">m</span></div>
+            <div class="rio-pref-flecha ${flechaClass}">${flecha}</div>
+            <div class="rio-pref-variacion ${variacion >= 0 ? 'var-pos' : 'var-neg'}">${varStr}</div>
+          </div>
+          <div class="rio-pref-meta">
+            <span>Alerta: ${alerta}m</span>
+            <span>Evacua: ${evacua}m</span>
+            <span class="rio-pref-fecha">${escHtml(r.fecha || '')}</span>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  el.innerHTML = `
+    <div class="slider-wrapper" id="slider-rios" style="background:transparent;box-shadow:none;">
+      <div class="slider-track">${slidesHtml}</div>
+      <button class="slider-btn prev" aria-label="Anterior">❮</button>
+      <button class="slider-btn next" aria-label="Siguiente">❯</button>
+    </div>
+    <div class="pub-dots" id="rios-dots" style="position:static;justify-content:center;margin-top:8px;"></div>
+    <p class="info-source" style="margin-top:8px;text-align:center;">
+      Fuente: Prefectura Naval Argentina ·
+      <a class="info-source-link" href="https://contenidosweb.prefecturanaval.gob.ar/alturas/" target="_blank" rel="noopener">🌐 Ver datos oficiales</a>
+    </p>`;
+
+  // Lógica del slider
+  const track  = el.querySelector('.slider-track');
+  const slides = el.querySelectorAll('.slider-slide');
+  const dotsEl = document.getElementById('rios-dots');
+  let current  = 0;
+
+  // Crear dots
+  slides.forEach((_, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'pub-dot' + (i === 0 ? ' active' : '');
+    dot.setAttribute('aria-label', `Río ${i + 1}`);
+    dot.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(dot);
+  });
+
+  function goTo(idx) {
+    current = Math.max(0, Math.min(idx, slides.length - 1));
+    track.style.transform = `translateX(${-current * 100}%)`;
+    dotsEl.querySelectorAll('.pub-dot').forEach((d, i) =>
+      d.classList.toggle('active', i === current));
+  }
+
+  el.querySelector('.prev').addEventListener('click', () => goTo(current - 1));
+  el.querySelector('.next').addEventListener('click', () => goTo(current + 1));
+
+  // Auto-avance cada 5 segundos
+  let timer = setInterval(() => goTo((current + 1) % slides.length), 5000);
+  el.addEventListener('touchstart', () => clearInterval(timer), { passive: true });
+}
 
     // Agrupar por río
     const grupos = {};
@@ -333,20 +450,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     el.innerHTML = html;
 
-    // Botón para abrir PDF del día
-    const hoy = new Date();
-    const dd = String(hoy.getDate()).padStart(2,'0');
-    const mm = String(hoy.getMonth()+1).padStart(2,'0');
-    const yyyy = hoy.getFullYear();
-    // URL del PDF de Prefectura (formato conocido)
-    const pdfUrl = `https://contenidosweb.prefecturanaval.gob.ar/alturas/pdf/alturas_${dd}-${mm}.pdf`;
+    // Botón PDF: abre la página oficial de Prefectura Naval directamente
+    // No usamos visor embebido porque Prefectura no tiene URL de PDF predecible.
+    // La página web es pública y tiene los datos actualizados en tiempo real.
+    const URL_PREFECTURA = 'https://contenidosweb.prefecturanaval.gob.ar/alturas/';
     const linkPdf = document.getElementById('link-pdf-rios');
     if (linkPdf) {
-      linkPdf.href = pdfUrl;
-      linkPdf.addEventListener('click', (e) => {
-        e.preventDefault();
-        abrirVisorPDF(pdfUrl);
-      });
+      linkPdf.href = URL_PREFECTURA;
+      linkPdf.textContent = '🌐 Ver datos oficiales';
+      linkPdf.removeEventListener('click', linkPdf._handler);
     }
   }
 
@@ -384,12 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!data || !data.length) { el.innerHTML = '<p class="empty-msg">Sin datos. Cargalos en el Sheets.</p>'; return; }
     // Normalizar nombres de columna (tienen espacios en el Sheets actual)
     const norm = data.map(f => ({
-      nombre:      f.nombre      || f['nombre ']     || '',
-      direccion:   f.direccion   || f['direccion ']  || '',
-      telefono:    f.telefono    || f[' telefono']   || '',
+      nombre:      f.nombre      || f['nombre ']      || '',
+      direccion:   f.direccion   || f['direccion ']   || '',
+      telefono:    f.telefono    || f[' telefono']    || f['telefono '] || '',
       fecha:       f.fecha       || '',
       horario:     f.horario     || '',
-      observacion: f.observacion || f['observacion ']|| '',
+      observacion: f.observacion || f['observacion '] || '',
+      // maps: acepta 'maps_url', 'indicaciones' o variantes con espacios
+      maps_url:    f.maps_url    || f['maps_url ']    || f['indicaciones'] || f['indicaciones '] || f[' indicaciones'] || '',
     }));
     const hoy      = norm.filter(f => esHoy(f.fecha));
     const proximos = norm.filter(f => !esHoy(f.fecha) && esFuturo(f.fecha)).slice(0,4);
@@ -862,3 +976,28 @@ document.addEventListener('DOMContentLoaded', () => {
   renderGaleria();
   renderContactos();
 });
+
+// Volumen
+audio.volume = 0.8;
+const btnVolUp   = document.getElementById('btn-vol-up');
+const btnVolDown = document.getElementById('btn-vol-down');
+const eqBars     = document.getElementById('eq-bars');
+const dialNeedle = document.getElementById('dial-needle');
+
+btnVolUp.addEventListener('click', () => {
+  audio.volume = Math.min(1, audio.volume + 0.1);
+});
+btnVolDown.addEventListener('click', () => {
+  audio.volume = Math.max(0, audio.volume - 0.1);
+});
+
+// Activar/desactivar animaciones según estado
+function setPlayerAnimations(playing) {
+  if (playing) {
+    eqBars.classList.add('active');
+    dialNeedle.classList.add('active');
+  } else {
+    eqBars.classList.remove('active');
+    dialNeedle.classList.remove('active');
+  }
+}
