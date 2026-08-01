@@ -913,16 +913,41 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Agrupar por categoria
+    // ── Normalizar columnas del Sheets (nombres exactos de la hoja nueva) ──
+    const norm = data
+      .filter(r => {
+        const activo = (r['Activo'] || r['activo'] || '').toString().trim().toLowerCase();
+        return activo === 'sí' || activo === 'si' || activo === '1' || activo === 'true';
+      })
+      .map(r => ({
+        nombre:      r['Nombre']                   || r['nombre']       || '',
+        categoria:   r['Categoría']                || r['Categoria']    || r['categoria'] || 'Otros',
+        telCorto:    (r['Teléfono Corto']          || r['telefono_corto']  || '').toString().trim(),
+        telVisible:  r['Teléfono Visible']         || r['telefono_visible'] || r['Teléfono'] || r['telefono'] || '',
+        telLink:     r['Enlace de Llamada (tel:)'] || r['enlace_llamada']   || r['telefono_link'] || '',
+        descripcion: r['Detalle / Notas']          || r['descripcion']  || r['detalle'] || '',
+        maps:        r['Ubicación (Google Maps)']  || r['maps_url']     || r['ubicacion'] || '',
+        web:         r['Sitio Web']                || r['web_url']      || r['sitio_web'] || '',
+      }));
+
+    if (!norm.length) {
+      el.innerHTML = '<p class="empty-msg">No hay contactos activos configurados.</p>';
+      return;
+    }
+
+    // Agrupar por categoría respetando el orden de aparición
     const grupos = {};
-    data.forEach(c => {
+    const ordenCats = [];
+    norm.forEach(c => {
       const cat = c.categoria || 'Otros';
-      if (!grupos[cat]) grupos[cat] = [];
+      if (!grupos[cat]) { grupos[cat] = []; ordenCats.push(cat); }
       grupos[cat].push(c);
     });
 
     // Íconos por categoría
     const iconos = {
+      'Telefonos útiles':  '📞',
+      'Teléfonos útiles':  '📞',
       'Emergencias':       '🚨',
       'Salud':             '🏥',
       'Seguridad':         '👮',
@@ -936,7 +961,8 @@ document.addEventListener('DOMContentLoaded', () => {
       'Otros':             '📞',
     };
 
-    Object.entries(grupos).forEach(([cat, items]) => {
+    ordenCats.forEach(cat => {
+      const items = grupos[cat];
       const grupo = document.createElement('div');
       grupo.className = 'contacto-grupo';
       grupo.innerHTML = `<div class="contacto-grupo-titulo">${iconos[cat] || '📞'} ${escHtml(cat)}</div>`;
@@ -945,22 +971,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = 'contacto-card';
 
-        const tel    = (c.telefono || '').replace(/\s/g,'');
-        const maps   = c.maps_url  || '';
-        const web    = c.web_url   || '';
-        const wa     = c.whatsapp  || '';
+        // Resolver href tel: — prioridad: columna explícita > construir del número visible
+        const telHref = c.telLink
+          ? c.telLink
+          : c.telVisible
+            ? 'tel:' + c.telVisible.replace(/[\s\-().]/g, '')
+            : '';
+
+        // Número visible: si hay corto, mostrarlo grande + el largo al lado
+        const telMostrado = c.telCorto
+          ? `<span class="contacto-tel-corto">${escHtml(c.telCorto)}</span><span class="contacto-tel-largo">${escHtml(c.telVisible)}</span>`
+          : `<span class="contacto-tel-largo">${escHtml(c.telVisible)}</span>`;
 
         card.innerHTML = `
           <div class="contacto-info">
             <div class="contacto-nombre">${escHtml(c.nombre)}</div>
+            ${c.telVisible ? `<div class="contacto-tel">${telMostrado}</div>` : ''}
             ${c.descripcion ? `<div class="contacto-desc">${escHtml(c.descripcion)}</div>` : ''}
-            ${c.direccion   ? `<div class="contacto-dir">📍 ${escHtml(c.direccion)}</div>` : ''}
           </div>
           <div class="contacto-acciones">
-            ${tel  ? `<a class="contacto-btn btn-tel"  href="tel:${tel}"  aria-label="Llamar">📞</a>` : ''}
-            ${wa   ? `<a class="contacto-btn btn-wa"   href="https://wa.me/${wa.replace(/\D/g,'')}" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>` : ''}
-            ${maps ? `<a class="contacto-btn btn-maps" href="${escHtml(maps)}" target="_blank" rel="noopener" aria-label="Ver en mapa">🗺️</a>` : ''}
-            ${web  ? `<a class="contacto-btn btn-web"  href="${escHtml(web)}"  target="_blank" rel="noopener" aria-label="Sitio web">🌐</a>` : ''}
+            ${telHref ? `<a class="contacto-btn btn-tel" href="${escHtml(telHref)}" aria-label="Llamar">📞</a>` : ''}
+            ${c.maps  ? `<a class="contacto-btn btn-maps" href="${escHtml(c.maps)}" target="_blank" rel="noopener" aria-label="Ver en mapa">🗺️</a>` : ''}
+            ${c.web   ? `<a class="contacto-btn btn-web"  href="${escHtml(c.web)}"  target="_blank" rel="noopener" aria-label="Sitio web">🌐</a>` : ''}
           </div>`;
         grupo.appendChild(card);
       });
