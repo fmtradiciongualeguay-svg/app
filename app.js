@@ -242,6 +242,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Publicidades
     renderPublicidades(await fetchData('publicidades'));
+
+    // Noticias/destacados del inicio
+    renderNoticias(await fetchData('noticias'));
+
+    // Conectar widgets del inicio con modales hacia Info Local
+    conectarWidgetModal('widget-clima',   '🌤️ Clima en Gualeguay',    'clima-ext-content');
+    conectarWidgetModal('widget-rios',    '🌊 Estado de los Ríos',    'rios-prefectura-content');
+    conectarWidgetModal('widget-farmacia','💊 Farmacia de Turno',     'farmacia-ext-content');
   }
 
   function renderWidgetClima(clima) {
@@ -407,8 +415,8 @@ document.addEventListener('DOMContentLoaded', () => {
   el.innerHTML = `
     <div class="slider-wrapper" id="slider-rios" style="background:transparent;box-shadow:none;">
       <div class="slider-track">${slidesHtml}</div>
-      <button class="slider-btn prev" aria-label="Anterior">❮</button>
-      <button class="slider-btn next" aria-label="Siguiente">❯</button>
+      <button class="slider-btn prev" aria-label="Anterior">‹</button>
+      <button class="slider-btn next" aria-label="Siguiente">›</button>
     </div>
     <div class="pub-dots" id="rios-dots" style="position:static;justify-content:center;margin-top:8px;"></div>
     <p class="info-source" style="margin-top:8px;text-align:center;">
@@ -457,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderRiosManual(data) {
     const el = document.getElementById('rios-manual-content');
     if (!data || !data.length) { el.innerHTML = '<p class="empty-msg">Sin registros cargados aún.<br>Cargalos en la hoja rios_manual del Sheets.</p>'; return; }
-    el.innerHTML = [...data].reverse().slice(0,5).map(r => `
+    el.innerHTML = [...data].reverse().map(r => `
       <div class="rio-item">
         <div class="rio-header">
           <span class="rio-nombre">${escHtml(r.estacion || '—')}</span>
@@ -513,7 +521,86 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>`;
   }
 
-  // ─── 8. SLIDER PUBLICIDADES ───────────────────────────────────────────────
+  // ─── 8b. NOTICIAS / DESTACADOS DEL INICIO ────────────────────────────────
+  // Hoja "noticias" en Sheets — columnas: titulo, subtitulo, imagen_url, link_url,
+  //   tipo (noticia | video | publicidad), activo (SI/NO)
+  // Regla 3:1 — cada 3 noticias se inserta 1 publicidad si existe en la hoja publicidades
+  function renderNoticias(data) {
+    const contenedor = document.getElementById('noticias-container');
+    if (!contenedor) return;
+
+    const items = (data || []).filter(n => {
+      const activo = (n.activo || '').toString().trim().toLowerCase();
+      return activo === 'si' || activo === 'sí' || activo === '1';
+    });
+
+    if (!items.length) {
+      contenedor.style.display = 'none';
+      return;
+    }
+    contenedor.style.display = 'block';
+
+    // Construir slides
+    const track = contenedor.querySelector('#noticias-track');
+    const dots  = contenedor.querySelector('#noticias-dots');
+    if (!track || !dots) return;
+    track.innerHTML = '';
+    dots.innerHTML  = '';
+
+    items.forEach((n, i) => {
+      const esVideo = (n.tipo || '').toLowerCase() === 'video';
+      const slide   = document.createElement('div');
+      slide.className = 'noticia-slide';
+
+      if (n.imagen_url) {
+        slide.style.backgroundImage = `url(${n.imagen_url})`;
+      } else {
+        slide.style.background = 'linear-gradient(135deg,#3a0000,#6b0000)';
+      }
+
+      slide.innerHTML = `
+        <div class="noticia-overlay">
+          ${esVideo ? '<div class="noticia-play">▶</div>' : ''}
+          <div class="noticia-texto">
+            <div class="noticia-titulo">${escHtml(n.titulo || '')}</div>
+            ${n.subtitulo ? `<div class="noticia-sub">${escHtml(n.subtitulo)}</div>` : ''}
+          </div>
+        </div>`;
+
+      if (n.link_url) {
+        slide.style.cursor = 'pointer';
+        slide.addEventListener('click', () => {
+          if (esVideo && n.video_id) loadYouTubePlayer(n.video_id, n.titulo, false);
+          else window.open(n.link_url, '_blank', 'noopener');
+        });
+      }
+
+      track.appendChild(slide);
+
+      const dot = document.createElement('button');
+      dot.className = 'pub-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', `Noticia ${i + 1}`);
+      dot.addEventListener('click', () => goToNoticia(i));
+      dots.appendChild(dot);
+    });
+
+    let idxN = 0;
+    function goToNoticia(i) {
+      idxN = (i + items.length) % items.length;
+      track.style.transform = `translateX(${-idxN * 100}%)`;
+      dots.querySelectorAll('.pub-dot').forEach((d, j) => d.classList.toggle('active', j === idxN));
+    }
+
+    contenedor.querySelector('#noticias-prev')?.addEventListener('click', () => goToNoticia(idxN - 1));
+    contenedor.querySelector('#noticias-next')?.addEventListener('click', () => goToNoticia(idxN + 1));
+
+    // Auto-avance
+    let timerN = setInterval(() => goToNoticia(idxN + 1), 5000);
+    track.addEventListener('touchstart', () => clearInterval(timerN), { passive: true });
+    goToNoticia(0);
+  }
+
+
   let pubTimer = null, pubIdx = 0;
   function renderPublicidades(data) {
     const wrap  = document.getElementById('pub-slider');
@@ -1000,6 +1087,58 @@ document.addEventListener('DOMContentLoaded', () => {
       el.appendChild(grupo);
     });
   }
+  // ─── MODAL WIDGETS ──────────────────────────────────────────────────────
+
+  function crearModal() {
+    if (document.getElementById('modal-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box" id="modal-box">
+        <div class="modal-header">
+          <span class="modal-titulo" id="modal-titulo"></span>
+          <button class="modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarModal(); });
+    document.getElementById('modal-close').addEventListener('click', cerrarModal);
+  }
+
+  function abrirModal(titulo, contenidoEl) {
+    crearModal();
+    document.getElementById('modal-titulo').textContent = titulo;
+    const body = document.getElementById('modal-body');
+    body.innerHTML = '';
+    if (typeof contenidoEl === 'string') {
+      body.innerHTML = contenidoEl;
+    } else {
+      body.appendChild(contenidoEl.cloneNode(true));
+    }
+    document.getElementById('modal-overlay').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function cerrarModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+
+  function conectarWidgetModal(widgetId, tituloModal, seccionTarget) {
+    const card = document.getElementById(widgetId);
+    if (!card) return;
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => {
+      const seccion = document.getElementById(seccionTarget);
+      if (seccion) {
+        abrirModal(tituloModal, seccion);
+      }
+    });
+  }
+
   // ─── ARRANQUE ─────────────────────────────────────────────────────────────
   initConfig().then(cfg => {
     initRedesPanel(cfg);
